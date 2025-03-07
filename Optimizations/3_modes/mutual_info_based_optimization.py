@@ -1,12 +1,16 @@
 """
 This is the file for optimizing the Bogolibov unitary based on the
 mutual information of the new basis ground state.
+
+Change the Model Hamiltonian that you use in get_Hamiltonian() function and
+model = , variable definition
 """
 
 from utils.util_gfro import *
 from utils.util_tensornetwork import get_approx_bd_mps, get_mps
 from utils.util_hamil import anharmonic_three_mode_H
 from utils.util_mutualinfo import mutual_info_full
+from scipy.optimize import minimize
 import csv
 import os
 
@@ -76,7 +80,7 @@ if __name__ == '__main__':
     ed_ground_state_energy = eig_value
 
     reshaped_gs = ed_ground_state.reshape(truncation, truncation, truncation)
-    threshold = ed_ground_state_energy * 0.0001
+    threshold = abs(ed_ground_state_energy * 0.0001)
     exact_bd = get_approx_bd_mps(reshaped_gs, threshold=threshold)
 
     print(f"Almost Exact BD {threshold}: {exact_bd}")
@@ -126,25 +130,28 @@ if __name__ == '__main__':
 
     error, _ = get_mps(reshaped_gs, bd)
 
+    energy_change = abs(ground_state_energy_optim - ed_ground_state_energy)
     print(f"Error in MPS: {error}")
 
     print(f"Almost Exact BD {threshold}: {bd_optim}")
     print(f"Ground state energy: {ground_state_energy_optim}")
-    print(f"Ground state energy change: {abs(ground_state_energy_optim - ed_ground_state_energy)}")
+    print(f"Ground state energy change: {energy_change}")
 
-    file_name = f"../Results/mutual_info_based_3mod.csv"
+    file_name = f"../../Results/mutual_info_based_3mod.csv"
 
     file_exists = os.path.isfile(file_name)
 
-    with open(file_name, mode='a' if file_exists else 'w', newline='',
-              encoding='utf-8') as csvfile:
-        writer = csv.writer(csvfile)
+    if energy_change < threshold:
 
-        # Write the header only if the file doesn't exist
-        if not file_exists:
+        with open(file_name, mode='a' if file_exists else 'w', newline='',
+                  encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+
+            # Write the header only if the file doesn't exist
+            if not file_exists:
+                writer.writerow(
+                    ['Model', 'Truncation', 'Threshold', 'Initial BD', 'Final BD', 'Method', 'Intermediate Data'])
+
+            # Write the data
             writer.writerow(
-                ['Model', 'Truncation', 'Threshold', 'Initial BD', 'Final BD', 'Method', 'Intermediate Data'])
-
-        # Write the data
-        writer.writerow(
-            [model, truncation, threshold, exact_bd, bd_optim, 'Mutual Info', intermediate_data])
+                [model, truncation, threshold, exact_bd, bd_optim, 'Mutual Info', intermediate_data])

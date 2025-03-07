@@ -72,6 +72,24 @@ def anharmonic_three_mode_H(params):
 
     return H_real(normal_ordered(get_boson_operator(Hc)))
 
+def cube_power_three_mode_H(params):
+    """
+    Bi-linear coupling with three modes. Equal coefficient distribution
+    over xu yz and zx
+    :param params: The coefficients of each term of the Hamiltonian.
+    :return:
+    """
+    Hc = QuadOperator('p0 p0', params[0])
+    Hc += QuadOperator('q0 q0', params[0])
+    Hc += QuadOperator('p1 p1', params[1])
+    Hc += QuadOperator('q1 q1', params[1])
+    Hc += QuadOperator('p2 p2', params[2])
+    Hc += QuadOperator('q2 q2', params[2])
+    Hc += QuadOperator('q0 q0 q1', params[3])
+    Hc += QuadOperator('q1 q1 q2', params[3])
+    Hc += QuadOperator('q2 q2 q0', params[3])
+
+    return H_real(normal_ordered(get_boson_operator(Hc)))
 
 def four_mode_anharmonic_H(params):
     """
