@@ -42,14 +42,14 @@ def mutual_information(rho_i, rho_j, rho_ij):
 
 # single-mode RDMs
 
-def one_mode_rdm(f1, n):
+def one_mode_rdm(f1, trunc):
 
-    rho_1 = np.zeros((n, n), dtype=complex)
-    rho_2 = np.zeros((n, n), dtype=complex)
-    rho_3 = np.zeros((n, n), dtype=complex)
+    rho_1 = np.zeros((trunc, trunc), dtype=complex)
+    rho_2 = np.zeros((trunc, trunc), dtype=complex)
+    rho_3 = np.zeros((trunc, trunc), dtype=complex)
 
-    for i in range(n):
-        for j in range(n):
+    for i in range(trunc):
+        for j in range(trunc):
             rho_1[i, j] = np.sum(f1[i, :, :] * np.conj(f1[j, :, :]))
             rho_2[i, j] = np.sum(f1[:, i, :] * np.conj(f1[:, j, :]))
             rho_3[i, j] = np.sum(f1[:, :, i] * np.conj(f1[:, :, j]))
@@ -58,12 +58,12 @@ def one_mode_rdm(f1, n):
 
 
 
-def mutual_info_full(f1, n):
+def mutual_info_full(f1, trunc):
 
-    rho_1, rho_2, rho_3 = one_mode_rdm(f1, n)
-    rho_12 = two_mode_rdm(f1, 0, 1, n)
-    rho_13 = two_mode_rdm(f1, 0, 2, n)
-    rho_23 = two_mode_rdm(f1, 1, 2, n)
+    rho_1, rho_2, rho_3 = one_mode_rdm(f1, trunc)
+    rho_12 = two_mode_rdm(f1, 0, 1, trunc)
+    rho_13 = two_mode_rdm(f1, 0, 2, trunc)
+    rho_23 = two_mode_rdm(f1, 1, 2, trunc)
 
     I_12 = mutual_information(rho_1, rho_2, rho_12)
     I_23 = mutual_information(rho_2, rho_3, rho_23)
