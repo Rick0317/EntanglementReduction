@@ -1,8 +1,19 @@
+"""
+This is the file for optimizing the Bogolibov unitary based on the error
+of representing the ground state with finite bond dimension MPS.
+"""
+
 from utils.util_gfro import *
 from utils.util_tensornetwork import get_approx_tensor, get_exact_bd_mps, get_approx_bd_mps, get_mps
 from utils.util_hamil import bilinear_three_mode_H, anharmonic_three_mode_H
-from openfermion import expectation, get_sparse_operator
-import numpy as np
+import csv
+import os
+
+
+def get_Hamiltonian():
+    h_variables = [1 / 2, 1 / 2, 1 / 2, 0.6]
+    model_H = anharmonic_three_mode_H(h_variables)
+    return model_H
 
 def error_based_costfn(X, H, n, trunc, bd):
     """
@@ -24,8 +35,7 @@ def error_based_costfn(X, H, n, trunc, bd):
 
     B_b, B_bd = transformed_op_inv_no_translation(U, V)
 
-    h_variables = [1 / 2, 1 / 2, 1 / 2, 0.6]
-    model_H = anharmonic_three_mode_H(h_variables)
+    model_H = get_Hamiltonian()
 
     H1 = substitute_operators(model_H, B_b, B_bd)
 
@@ -56,10 +66,10 @@ def hamiltonian_reconstruction(X, H, n):
 
 
 if __name__ == '__main__':
+    model = "anharmonic_three_mode_H"
 
     truncation = 10
-    h_variables = [1 / 2, 1 / 2, 1 / 2, 0.6]
-    model_H = anharmonic_three_mode_H(h_variables)
+    model_H = get_Hamiltonian()
 
     eig_value, eig_vec = boson_eigenspectrum_sparse(model_H, truncation, 1)
 
@@ -69,7 +79,7 @@ if __name__ == '__main__':
 
     reshaped_gs = ed_ground_state.reshape(truncation, truncation, truncation)
 
-    threshold = 1e-8
+    threshold = ed_ground_state_energy * 0.0001
 
     exact_bd = get_approx_bd_mps(reshaped_gs, threshold=threshold)
 
@@ -93,14 +103,17 @@ if __name__ == '__main__':
         return cost1
 
 
+    intermediate_data = []
+
     def printx(xk):
         current_value = cost_fn(xk)
+        intermediate_data.append(current_value)
         print("Current error:", current_value)
 
     result = minimize(cost_fn, X, method='BFGS', tol=None,
                       options=options, callback=printx)
 
-    model_H = anharmonic_three_mode_H(h_variables)
+    model_H = get_Hamiltonian()
 
     H_optimized = hamiltonian_reconstruction(result.x, model_H, n)
 
@@ -121,3 +134,22 @@ if __name__ == '__main__':
     print(f"Almost Exact BD {threshold}: {bd_optim}")
     print(f"Ground state energy: {ground_state_energy_optim}")
     print(f"Ground state energy change: {abs(ground_state_energy_optim - ed_ground_state_energy)}")
+
+    file_name = f"../Results/error_based_3mod.csv"
+
+    file_exists = os.path.isfile(file_name)
+
+    with open(file_name, mode='a' if file_exists else 'w', newline='',
+              encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+
+        # Write the header only if the file doesn't exist
+        if not file_exists:
+            writer.writerow(
+                ['Model', 'Truncation', 'Threshold', 'Initial BD', 'Final BD',
+                 'Method', 'Intermediate Data'])
+
+        # Write the data
+        writer.writerow(
+            [model, truncation, threshold, exact_bd, bd_optim, 'Representation Error',
+             intermediate_data])

@@ -123,11 +123,10 @@ def initial(n):
 
 def initial_only_PQ(n):
     p = np.random.uniform(-2, 2, (n,n))
-    P = p.T + p # P satifies P=P^T
+    P = p.T + p
 
     q = np.random.uniform(-2, 2, (n,n))
-    Q = q.T + q # Q satifies Q=Q^T
-
+    Q = q.T + q
 
     return P, Q
 
