@@ -11,7 +11,7 @@ from scipy import linalg
 
 def initial_only_PQ(n):
     p = np.random.uniform(-2, 2, (n,n))
-    P = p.T + p
+    P = p - p.T
 
     q = np.random.uniform(-2, 2, (n,n))
     Q = q.T + q
@@ -23,7 +23,7 @@ def initial_only_PQ(n):
 def super_matrix_exp(P, Q):
 
     # Create the super matrix A
-    A = np.block([[P, Q],[Q, P]])
+    A = np.block([[P, Q], [Q, P]])
 
     expA = linalg.expm(A)
 
@@ -31,7 +31,7 @@ def super_matrix_exp(P, Q):
 
 
 # exatract U and V matrices from expA [[U,-V],[-V,U]]= e^A)
-def extract_sub_matrices(expA,n):
+def extract_sub_matrices(expA, n):
 
     # Extract sub-matrices
     U = expA[:n, :n]
@@ -47,8 +47,8 @@ def triu_to_vector(matrix):
 
     return upper_tri_vector
 
-# recreate symmetric matrix from triangular vector of size n(n+1)/2
-def vector_to_triu(vector,n):
+
+def vector_to_triu(vector, n):
 
     matrix = np.zeros((n, n))
 
@@ -65,7 +65,7 @@ def vector_to_triu(vector,n):
     return matrix
 
 # extract n(n-1)/2 off diagonal upper terms from P
-def skew_sym_to_vec(P,n):
+def skew_sym_to_vec(P, n):
 
     vec = []
 
@@ -75,8 +75,8 @@ def skew_sym_to_vec(P,n):
 
     return vec
 
-# Create skew_symmetric P
-def vec_to_skew_sym(vec,n):
+
+def vec_to_skew_sym(vec, n):
 
     A = np.zeros((n, n))
 
@@ -184,7 +184,7 @@ def bosonic_B(U):
 
 
 
-def transformed_op_inv_no_translation(U,V):
+def transformed_op_inv_no_translation(U, V):
 
     Ub = bosonic_B(U.T) # Calculate list of bosonic terms for U c
     Ubd = bosonic_BD(U.T) # Calculate list of bosonic terms for U c^dagger

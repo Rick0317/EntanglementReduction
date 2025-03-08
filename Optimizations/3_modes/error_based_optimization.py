@@ -37,6 +37,7 @@ def error_based_costfn(X, H, n, trunc, bd):
 
     U, V = extract_sub_matrices(expA,n)
 
+
     B_b, B_bd = transformed_op_inv_no_translation(U, V)
 
     model_H = get_Hamiltonian()
@@ -92,7 +93,7 @@ if __name__ == '__main__':
     n = 3
     P, Q= initial_only_PQ(n)
     X = 1e-6 * flatten_matrices_only_PQ(P, Q, n)
-    maxit = 100
+    maxit = 20
     options = {
         'maxiter': maxit,
         'gtol': 1e-7,
