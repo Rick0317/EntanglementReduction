@@ -1,24 +1,7 @@
-"""
-This is the file for optimizing the Bogolibov unitary based on the
-mutual information of the new basis ground state.
+from RickVersion.utils.util_tensornetwork import get_approx_bd_mps, get_mps
+from RickVersion.utils.util_hamil import four_mode_anharmonic_H
+from RickVersion.utils.util_mutualinfo_4mode import mutual_info_full
 
-Change the Model Hamiltonian that you use in get_Hamiltonian() function and
-model = , variable definition
-"""
-
-from utils.util_gfro import *
-from utils.util_tensornetwork import get_approx_bd_mps, get_mps
-from utils.util_hamil import anharmonic_three_mode_H
-from utils.util_mutualinfo import mutual_info_full
-from scipy.optimize import minimize
-import csv
-import os
-
-
-def get_Hamiltonian():
-    h_variables = [1 / 2, 1 / 2, 1 / 2, 0.6]
-    model_H = anharmonic_three_mode_H(h_variables)
-    return model_H
 
 def mutual_info_cost_func(X, H, n, trunc, bd):
     """
@@ -40,7 +23,8 @@ def mutual_info_cost_func(X, H, n, trunc, bd):
 
     B_b, B_bd = transformed_op_inv_no_translation(U, V)
 
-    model_H = get_Hamiltonian()
+    h_variables = [1 / 2, 1 / 2, 1 / 2, 1 / 2, 0.4]
+    model_H = four_mode_anharmonic_H(h_variables)
 
     H1 = substitute_operators(model_H, B_b, B_bd)
 
@@ -48,11 +32,11 @@ def mutual_info_cost_func(X, H, n, trunc, bd):
 
     ground_state = eig_vecs
 
-    reshaped_gs = ground_state.reshape(trunc, trunc, trunc)
+    reshaped_gs = ground_state.reshape(trunc, trunc, trunc, trunc)
 
-    I_12, I_23, I_13 = mutual_info_full(reshaped_gs, n)
+    I_12, I_13, I_14, I_23, I_24, I_34 = mutual_info_full(reshaped_gs, n)
 
-    return I_12 + I_23 + I_13
+    return I_12 + I_13 + I_14 + I_23 + I_24 + I_34
 
 def hamiltonian_reconstruction(X, H, n):
     P, Q = recreate_matrices_PQ_only(X, n)
@@ -69,9 +53,10 @@ def hamiltonian_reconstruction(X, H, n):
 
 
 if __name__ == '__main__':
-    model = "anharmonic_three_mode_H"
-    truncation = 10
-    model_H = get_Hamiltonian()
+
+    truncation = 8
+    h_variables = [1 / 2, 1 / 2, 1 / 2, 1 / 2, 0.4]
+    model_H = four_mode_anharmonic_H(h_variables)
 
     eig_value, eig_vec = boson_eigenspectrum_sparse(model_H, truncation, 1)
 
@@ -79,14 +64,14 @@ if __name__ == '__main__':
 
     ed_ground_state_energy = eig_value
 
-    reshaped_gs = ed_ground_state.reshape(truncation, truncation, truncation)
-    threshold = abs(ed_ground_state_energy * 0.0001)
+    reshaped_gs = ed_ground_state.reshape(truncation, truncation, truncation, truncation)
+    threshold = 1e-10
     exact_bd = get_approx_bd_mps(reshaped_gs, threshold=threshold)
 
     print(f"Almost Exact BD {threshold}: {exact_bd}")
     print(f"Ground state energy: {ed_ground_state_energy}")
 
-    n = 3
+    n = 4
     P, Q= initial_only_PQ(n)
     X = 1e-6 * flatten_matrices_only_PQ(P, Q, n)
     maxit = 10
@@ -102,11 +87,8 @@ if __name__ == '__main__':
         cost1 = mutual_info_cost_func(X, model_H, n, truncation, bd)
         return cost1
 
-    intermediate_data = []
-
     def printx(xk):
         current_value = cost_fn(xk)
-        intermediate_data.append(current_value)
         print("Current total mutual information:", current_value)
 
 
@@ -114,7 +96,8 @@ if __name__ == '__main__':
     result = minimize(cost_fn, X, method='BFGS', tol=None,
                       options=options, callback=printx)
 
-    model_H = get_Hamiltonian()
+    h_variables = [1 / 2, 1 / 2, 1 / 2, 1 / 2, 0.4]
+    model_H = four_mode_anharmonic_H(h_variables)
 
     H_optimized = hamiltonian_reconstruction(result.x, model_H, n)
 
@@ -124,34 +107,14 @@ if __name__ == '__main__':
 
     ground_state_energy_optim = eig_value
 
-    reshaped_gs = ground_state_optim.reshape(truncation, truncation, truncation)
+    reshaped_gs = ground_state_optim.reshape(truncation, truncation, truncation, truncation)
 
     bd_optim = get_approx_bd_mps(reshaped_gs, threshold=threshold)
 
     error, _ = get_mps(reshaped_gs, bd)
 
-    energy_change = abs(ground_state_energy_optim - ed_ground_state_energy)
     print(f"Error in MPS: {error}")
 
     print(f"Almost Exact BD {threshold}: {bd_optim}")
     print(f"Ground state energy: {ground_state_energy_optim}")
-    print(f"Ground state energy change: {energy_change}")
-
-    file_name = f"../../Results/mutual_info_based_3mod.csv"
-
-    file_exists = os.path.isfile(file_name)
-
-    if energy_change < threshold:
-
-        with open(file_name, mode='a' if file_exists else 'w', newline='',
-                  encoding='utf-8') as csvfile:
-            writer = csv.writer(csvfile)
-
-            # Write the header only if the file doesn't exist
-            if not file_exists:
-                writer.writerow(
-                    ['Model', 'Truncation', 'Threshold', 'Initial BD', 'Final BD', 'Method', 'Intermediate Data'])
-
-            # Write the data
-            writer.writerow(
-                [model, truncation, threshold, exact_bd, bd_optim, 'Mutual Info', intermediate_data])
+    print(f"Ground state energy change: {abs(ground_state_energy_optim - ed_ground_state_energy)}")

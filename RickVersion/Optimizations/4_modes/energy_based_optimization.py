@@ -1,7 +1,7 @@
-from utils.util_gfro import *
-from utils.util_tensornetwork import get_approx_tensor, get_exact_bd_mps, get_approx_bd_mps, get_mps
-from utils.util_hamil import four_mode_anharmonic_H
-from openfermion import expectation, get_sparse_operator
+from RickVersion.utils.util_tensornetwork import get_approx_tensor, \
+    get_approx_bd_mps, get_mps
+from RickVersion.utils.util_hamil import four_mode_anharmonic_H
+from openfermion import get_sparse_operator
 import numpy as np
 
 def energy_based_costfn(X, H, n, trunc, bd):

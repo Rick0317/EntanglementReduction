@@ -5,15 +5,15 @@ from openfermion.ops import BosonOperator
 from openfermion.transforms import normal_ordered
 from openfermion import get_sparse_operator
 
-from scipy.sparse.linalg import eigsh, expm
+from scipy.sparse.linalg import eigsh
 from scipy import linalg
-
+from RickVersion.utils.util_quadratic import H_quadatic, H_cubic_only, b_transform, H_quartic_only
 
 def initial_only_PQ(n):
-    p = np.random.uniform(-2, 2, (n,n))
+    p = np.random.uniform(-1, 1, (n,n))
     P = p - p.T
 
-    q = np.random.uniform(-2, 2, (n,n))
+    q = np.random.uniform(-1, 1, (n,n))
     Q = q.T + q
 
     return P, Q
@@ -233,3 +233,84 @@ def boson_eigenspectrum_sparse(operator, truncation, k):
     eigenvalues, eigenvectors = eigsh(sparse_op, k=k, which='SA')
 
     return eigenvalues, eigenvectors
+
+
+def tranformed_operators_inv(U, V):
+
+    Ub = bosonic_B(U.T) # Calculate list of bosonic terms for U c
+    Ubd = bosonic_BD(U.T) # Calculate list of bosonic terms for U c^dagger
+    Vb = bosonic_B(V.T) # Calculate list of bosonic terms for V c
+    Vbd = bosonic_BD(V.T) # Calculate list of bosonic terms for V c^dagger
+
+    # tranformed operators
+    B_b = []
+    B_bd = []
+
+    # Iterate over corresponding elements of the input lists
+    for inUb, inUbd, inVb, inVbd in zip(Ub, Ubd, Vb, Vbd):
+        # Add corresponding elements and append it to the result list
+        B_b.append(inUb + inVbd)
+        B_bd.append(inUbd + inVb)
+
+    return B_b, B_bd
+
+
+def H_real(H):
+    Hv,ops = extract_coeffs_and_ops(H)
+    Hv =[np.real(element) for element in Hv]
+    H = reconstruct_boson_operator(Hv, ops)
+
+    return H
+
+
+def extract_coeffs_and_ops(boson_operator):
+    coeffs = []
+    ops = []
+    for term, coeff in boson_operator.terms.items():
+        ops.append(term)
+        coeffs.append(coeff)
+    return coeffs, ops
+
+# Reconstruct bosonic operator from coefficients and operators
+def reconstruct_boson_operator(coeffs, ops):
+    boson_operator = BosonOperator()
+    for coeff, op in zip(coeffs, ops):
+        boson_operator += BosonOperator(op, coeff)
+    return boson_operator
+
+
+def create_diagonal_quadratic(L):
+    n = L.shape[0]
+
+    H = BosonOperator()
+
+    for p in range(n):
+        coefficient = L[p]
+        # Create the term c_p^† * c_p * c_q^† * c_q
+        term = ((p, 1), (p, 0))
+        H += BosonOperator(term, coefficient)
+
+    return H
+
+
+def quad_diagonalization(H,n):
+
+    Hq = H_quadatic(H)
+
+    Hc = H_cubic_only(H)
+
+    U,V,L,G,K = b_transform(Hq,n)
+
+    B_b,B_bd = tranformed_operators_inv(U, V)
+
+    Hqr = create_diagonal_quadratic(L.real.flatten()) + K.real.flatten()[0] * BosonOperator('')
+
+    Hcr = substitute_operators(Hc, B_b, B_bd)
+
+    H4 = H_quartic_only(H)
+
+    H4r = substitute_operators(H4, B_b, B_bd)
+
+    Hr1 = Hqr + Hcr + H4r
+
+    return H_real(Hr1)

@@ -4,11 +4,21 @@ Test the implementation of Bogoliubov transformation.
 
 import unittest
 
-from utils.util_gfro import *
 import numpy as np
 
 
 class TestMutualInformation(unittest.TestCase):
+
+    def test_initial_PQ(self):
+        n = 3
+        P, Q = initial_only_PQ(n)
+
+        P_dg = P.conj().T
+        Q_dg = Q.conj().T
+
+        assert np.allclose(-P_dg, P), "P should be skew symmetric"
+        assert np.allclose(Q_dg, Q), "Q should be symmetric"
+
     def test_u_v_construction(self):
         n = 3
         P, Q = initial_only_PQ(n)
@@ -36,4 +46,27 @@ class TestMutualInformation(unittest.TestCase):
         assert np.allclose(relation1, np.eye(n)), "Relation1 is incorrect"
         assert np.allclose(relation2,
                            np.zeros((n, n))), "Relation2 is incorrect"
+
+
+    def test_transformed_op_inv_no_translation(self):
+        n = 3
+        P, Q = initial_only_PQ(n)
+
+        expA = super_matrix_exp(P, Q)
+        U, V = extract_sub_matrices(expA, n)
+
+        B_b, B_bd = transformed_op_inv_no_translation(U, V)
+
+        assert len(B_b) == len(B_bd), "Length of B is incorrect"
+        assert len(B_b) == n, "Length of B is incorrect"
+
+    def test_transformed_op_inv_no_translation_custom_UV(self):
+        n = 2
+        U = np.array([[1, 0], [0, -1]])
+        V = np.array([[1, 1], [1, -1]])
+
+        B_b, B_bd = transformed_op_inv_no_translation(U, V)
+
+        assert len(B_b) == len(B_bd), "Length of B is incorrect"
+        assert len(B_b) == n, "Length of B is incorrect"
 

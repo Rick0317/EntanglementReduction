@@ -9,7 +9,7 @@ import os
 
 # Making sure that the coefficients are all real
 def H_real(H):
-    Hv,ops = extract_coeffs_and_ops(H)
+    Hv, ops = extract_coeffs_and_ops(H)
     Hv =[np.real(element) for element in Hv]
     H = reconstruct_boson_operator(Hv, ops)
 
@@ -33,6 +33,39 @@ def reconstruct_boson_operator(coeffs, ops):
     return boson_operator
 
 
+def bilinear_two_mode_H(params):
+    """
+    Bi-linear coupling with three modes. Equal coefficient distribution
+    over xu yz and zx
+    :param params: The coefficients of each term of the Hamiltonian.
+    :return:
+    """
+    Hc = QuadOperator('p0 p0', params[0])
+    Hc += QuadOperator('q0 q0', params[0])
+    Hc += QuadOperator('p1 p1', params[1])
+    Hc += QuadOperator('q1 q1', params[1])
+    Hc += QuadOperator('q0 q1', params[2])
+
+    return H_real(normal_ordered(get_boson_operator(Hc)))
+
+
+def un_coupled_three_mode_H(params):
+    """
+    Bi-linear coupling with three modes. Equal coefficient distribution
+    over xu yz and zx
+    :param params: The coefficients of each term of the Hamiltonian.
+    :return:
+    """
+    Hc = QuadOperator('p0 p0', params[0])
+    Hc += QuadOperator('q0 q0', params[0])
+    Hc += QuadOperator('p1 p1', params[1])
+    Hc += QuadOperator('q1 q1', params[1])
+    Hc += QuadOperator('p2 p2', params[2])
+    Hc += QuadOperator('q2 q2', params[2])
+
+    return H_real(normal_ordered(get_boson_operator(Hc)))
+
+
 def bilinear_three_mode_H(params):
     """
     Bi-linear coupling with three modes. Equal coefficient distribution
@@ -47,8 +80,24 @@ def bilinear_three_mode_H(params):
     Hc += QuadOperator('p2 p2', params[2])
     Hc += QuadOperator('q2 q2', params[2])
     Hc += QuadOperator('q0 q1', params[3])
-    Hc += QuadOperator('q1 q2', params[3])
-    Hc += QuadOperator('q0 q2', params[3])
+    Hc += QuadOperator('q1 q2', params[4])
+    Hc += QuadOperator('q0 q2', params[5])
+
+    return H_real(normal_ordered(get_boson_operator(Hc)))
+
+
+def anharmonic_two_mode_H(params):
+    """
+    Bi-linear coupling with three modes. Equal coefficient distribution
+    over xu yz and zx
+    :param params: The coefficients of each term of the Hamiltonian.
+    :return:
+    """
+    Hc = QuadOperator('p0 p0', params[0])
+    Hc += QuadOperator('q0 q0', params[0])
+    Hc += QuadOperator('p1 p1', params[1])
+    Hc += QuadOperator('q1 q1', params[1])
+    Hc += QuadOperator('q0 q0 q1 q1', params[2])
 
     return H_real(normal_ordered(get_boson_operator(Hc)))
 
@@ -67,8 +116,8 @@ def anharmonic_three_mode_H(params):
     Hc += QuadOperator('p2 p2', params[2])
     Hc += QuadOperator('q2 q2', params[2])
     Hc += QuadOperator('q0 q0 q1 q1', params[3])
-    Hc += QuadOperator('q1 q1 q2 q2', params[3])
-    Hc += QuadOperator('q0 q0 q2 q2', params[3])
+    Hc += QuadOperator('q1 q1 q2 q2', params[4])
+    Hc += QuadOperator('q0 q0 q2 q2', params[5])
 
     return H_real(normal_ordered(get_boson_operator(Hc)))
 
@@ -163,7 +212,8 @@ def six_mode_H(params):
 
 if __name__ == '__main__':
     truncation = 6
-    h_variables = [1 / 2, 1 / 2, 1/ 2, 0.4]
-    bilinearH = bilinear_three_mode_H(h_variables)
+    h_variables = [1 / 2, 1 / 2, 1/ 2]
+    bilinearH = un_coupled_three_mode_H(h_variables)
+    print(bilinearH)
 
     print(bilinearH)

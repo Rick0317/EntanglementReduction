@@ -1,25 +1,30 @@
 """
-This is the file for optimizing the Bogolibov unitary based on the error
-of representing the ground state with finite bond dimension MPS.
+This is the file for optimizing the Bogolibov unitary based on the
+minimum energy of the finite bond dimension MPS representation of the
+rotated ground state.
 
 Change the Model Hamiltonian that you use in get_Hamiltonian() function and
 model = , variable definition
 """
 
-from utils.util_gfro import *
-from utils.util_tensornetwork import get_approx_tensor, get_exact_bd_mps, get_approx_bd_mps, get_mps
-from utils.util_hamil import bilinear_three_mode_H, anharmonic_three_mode_H, cube_power_three_mode_H
+from RickVersion.utils.util_gfro import *
+from RickVersion.utils.util_tensornetwork import get_approx_tensor, \
+    get_approx_bd_mps, get_mps
+from RickVersion.utils.util_hamil import bilinear_three_mode_H, anharmonic_three_mode_H
+from openfermion import get_sparse_operator
+import numpy as np
 from scipy.optimize import minimize
 import csv
 import os
 
 
 def get_Hamiltonian():
-    h_variables = [1 / 2, 1 / 2, 1 / 2, 0.2]
-    model_H = anharmonic_three_mode_H(h_variables)
+    h_variables = [1 / 2, 1 / 2, 1 / 2, 0.1, 0.2, 0.2]
+    model_H = bilinear_three_mode_H(h_variables)
     return model_H
 
-def error_based_costfn(X, H, n, trunc, bd):
+
+def energy_based_costfn(X, H, n, trunc, bd):
     """
     We find the lowest energy with a given bond dimension
     We need to find the state with bd that lowers the energy.
@@ -37,24 +42,34 @@ def error_based_costfn(X, H, n, trunc, bd):
 
     U, V = extract_sub_matrices(expA,n)
 
-
     B_b, B_bd = transformed_op_inv_no_translation(U, V)
 
     model_H = get_Hamiltonian()
 
     H1 = substitute_operators(model_H, B_b, B_bd)
 
+    # H1 = quad_diagonalization(H1, n)
+
     _, eig_vecs = boson_eigenspectrum_sparse(H1, trunc, 1)
 
     ground_state = eig_vecs
 
+
     # 3 modes case
     reshaped_gs = ground_state.reshape(trunc, trunc, trunc)
 
-    error, _ = get_mps(reshaped_gs, bd)
+    approximate_gs = get_approx_tensor(reshaped_gs, bd)
 
-    return error
+    reshaped_approximate = approximate_gs.reshape(trunc ** 3,)
 
+    sparse_op = get_sparse_operator(H1, trunc=trunc)
+    sparse_op_array = sparse_op.toarray()
+
+    exp_value = np.vdot(reshaped_approximate, sparse_op_array @ reshaped_approximate)
+    norm_factor = np.vdot(reshaped_approximate, reshaped_approximate)
+    normalized_exp_value = exp_value / norm_factor
+
+    return normalized_exp_value
 
 def hamiltonian_reconstruction(X, H, n):
     P, Q = recreate_matrices_PQ_only(X, n)
@@ -71,7 +86,8 @@ def hamiltonian_reconstruction(X, H, n):
 
 
 if __name__ == '__main__':
-    model = "anharmonic_three_mode_H"
+
+    model = "bilinear_three_mode_H"
 
     truncation = 10
     model_H = get_Hamiltonian()
@@ -83,7 +99,10 @@ if __name__ == '__main__':
     ed_ground_state_energy = eig_value
 
     reshaped_gs = ed_ground_state.reshape(truncation, truncation, truncation)
-    threshold = 1e-10# abs(ed_ground_state_energy) * 0.0001
+
+    mps1_error, _ = get_mps(reshaped_gs, 1)
+    error_threshold_frac = 1e-4
+    threshold = abs(ed_ground_state_energy * error_threshold_frac)
 
     exact_bd = get_approx_bd_mps(reshaped_gs, threshold=threshold)
 
@@ -93,29 +112,28 @@ if __name__ == '__main__':
     n = 3
     P, Q= initial_only_PQ(n)
     X = 1e-6 * flatten_matrices_only_PQ(P, Q, n)
-    maxit = 20
+    maxit = 200
     options = {
         'maxiter': maxit,
-        'gtol': 1e-7,
+        'gtol': 1e-30,
         'disp': False
     }
 
-    bd = 2
+    bd = 1
 
     def cost_fn(X):
-        cost1 = error_based_costfn(X, model_H, n, truncation, bd)
+        cost1 = energy_based_costfn(X, model_H, n, truncation, bd)
         return cost1
 
 
     intermediate_data = []
-
     def printx(xk):
         current_value = cost_fn(xk)
         intermediate_data.append(current_value)
-        print("Current error:", current_value)
+        print(f"Difference: {abs(current_value - ed_ground_state_energy)}")
 
-    result = minimize(cost_fn, X, method='BFGS', tol=None,
-                      options=options, callback=printx)
+
+    result = minimize(cost_fn, X, method='COBYLA', options=options, callback=printx)
 
     model_H = get_Hamiltonian()
 
@@ -133,21 +151,18 @@ if __name__ == '__main__':
 
     error, _ = get_mps(reshaped_gs, bd)
 
-    change_gs = abs(ground_state_energy_optim - ed_ground_state_energy)
-
+    energy_change = abs(ground_state_energy_optim - ed_ground_state_energy)
     print(f"Error in MPS: {error}")
 
     print(f"Almost Exact BD {threshold}: {bd_optim}")
     print(f"Ground state energy: {ground_state_energy_optim}")
-    print(f"Ground state energy change: {change_gs}")
+    print(f"Ground state energy change: {energy_change}")
 
-
-    file_name = f"../../Results/error_based_3mod.csv"
+    file_name = f"../../Results/energy_based_3mod.csv"
 
     file_exists = os.path.isfile(file_name)
 
-    if change_gs < abs(ed_ground_state_energy) * 0.0001:
-
+    if energy_change < threshold:
         with open(file_name, mode='a' if file_exists else 'w', newline='',
                   encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile)
@@ -156,9 +171,11 @@ if __name__ == '__main__':
             if not file_exists:
                 writer.writerow(
                     ['Model', 'Truncation', 'Threshold', 'Initial BD', 'Final BD',
-                     'Method', 'Maximum Iterations', 'Intermediate Data'])
+                     'Method', 'Intermediate Data'])
 
             # Write the data
             writer.writerow(
-                [model, truncation, threshold, exact_bd, bd_optim, 'Representation Error',
-                 maxit, intermediate_data])
+                [model, truncation, threshold, exact_bd, bd_optim,
+                 'Energy Error',
+                 intermediate_data])
+

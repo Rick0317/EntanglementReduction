@@ -4,7 +4,7 @@ Test the implementation of Mutual Information.
 
 import unittest
 
-from utils.util_mutualinfo import von_neumann_entropy, mutual_info_full, one_mode_rdm
+from RickVersion.utils.util_mutualinfo import von_neumann_entropy, mutual_info_full, one_mode_rdm
 import numpy as np
 
 
