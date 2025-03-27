@@ -1,14 +1,14 @@
 """
 This is the file for optimizing the Bogolibov unitary based on the
-mutual information of the new basis ground state.
+Schmidt spectrum of the new basis ground state.
 
 Change the Model Hamiltonian that you use in get_Hamiltonian() function and
 model = , variable definition
 """
 from RickVersion.utils.util_gfro import *
 from RickVersion.utils.util_tensornetwork import get_approx_bd_mps, get_mps
-from RickVersion.utils.util_hamil import bilinear_three_mode_H, anharmonic_three_mode_H, henon_heiles_two_mode_H
-from RickVersion.utils.util_mutualinfo import mutual_info_full, mutual_info_full_n_sites
+from RickVersion.utils.util_hamil import bilinear_three_mode_H, anharmonic_three_mode_H
+from RickVersion.utils.util_mutualinfo import mutual_info_full
 from openfermion import get_quad_operator
 from scipy.optimize import minimize
 from RickVersion.Graph_plots.mutual_information_visualizer import visualize_mutual_information
@@ -16,50 +16,45 @@ import csv
 import os
 import matplotlib.pyplot as plt
 
-
 def get_Hamiltonian():
-    h_variables = [1 / 2, 1 / 2, 0.2, - 0.2 / 3]
-    model_H = henon_heiles_two_mode_H(h_variables)
+    h_variables = [1 / 2, 1 / 2, 1 / 2, 0.1, 0.1, 0.1]
+    model_H = bilinear_three_mode_H(h_variables)
     return model_H
 
-def mutual_info_cost_func(X, H, n, trunc, bd, n_modes):
-    """
-    We find the lowest energy with a given bond dimension
-    We need to find the state with bd that lowers the energy.
-    how to find such state.
-    :param X:
-    :param H:
-    :param n:
-    :param trunc:
-    :param bd: The bond dimension we use to find the lowest energy
-    :return:
-    """
+
+def shmidt_spectrum_cost(X, H, n, trunc, bd):
+
     P, Q = recreate_matrices_PQ_only(X, n)
 
     expA = super_matrix_exp(P, Q)
 
-    U, V = extract_sub_matrices(expA,n)
+    U, V = extract_sub_matrices(expA, n)
 
     B_b, B_bd = transformed_op_inv_no_translation(U, V)
 
     model_H = get_Hamiltonian()
 
-    H1 = substitute_operators(model_H, B_b, B_bd)
+    H2 = substitute_operators(model_H, B_b, B_bd)
 
-    # H2 = quad_diagonalization(H1, n)
-    del model_H, B_b, B_bd, U, V, expA, P, Q
+    # H1 = quad_diagonalization(H2, n)
 
-    _, eig_vecs = boson_eigenspectrum_sparse(H1, trunc, 1)
+    _, eig_vec = boson_eigenspectrum_sparse(H2, trunc, 1)
 
-    ground_state = eig_vecs
+    ground_state = eig_vec
 
-    reshaped_gs = ground_state.reshape(*(truncation,) * n_modes)
+    matrix_1 = ground_state.reshape(10, 100)
+    _, S1, __ = np.linalg.svd(matrix_1, full_matrices=False)
+    sum_S1_first = np.sum(S1[:5])
+    sum_s1_second = np.sum(S1[5:])
+    inverse1 = 1 / (sum_S1_first - sum_s1_second)
 
-    MI_list = mutual_info_full_n_sites(reshaped_gs, trunc, n_modes)
-    del reshaped_gs
+    matrix_2 = ground_state.reshape(100, 10)
+    _, S2, __ = np.linalg.svd(matrix_2, full_matrices=False)
+    sum_S2_first = np.sum(S2[:5])
+    sum_S2_second = np.sum(S2[5:])
+    inverse2 = 1 / (sum_S2_first - sum_S2_second)
 
-    return sum(MI_list)
-
+    return inverse1 + inverse2
 
 def hamiltonian_reconstruction(X, H, n):
     P, Q = recreate_matrices_PQ_only(X, n)
@@ -76,9 +71,8 @@ def hamiltonian_reconstruction(X, H, n):
 
 
 if __name__ == '__main__':
-    model = "henon_heiles_two_mode_H"
+    model = "bilinear_three_mode_H"
     truncation = 10
-    n_modes = 2
     model_H = get_Hamiltonian()
 
     eig_value, eig_vec = boson_eigenspectrum_sparse(model_H, truncation, 1)
@@ -87,12 +81,12 @@ if __name__ == '__main__':
 
     ed_ground_state_energy = eig_value
 
-    reshaped_gs = ed_ground_state.reshape(*(truncation,) * n_modes)
+    reshaped_gs = ed_ground_state.reshape(truncation, truncation, truncation)
 
-    I_list = mutual_info_full_n_sites(reshaped_gs, truncation, n_modes)
-    visualize_mutual_information(I_list, n_modes)
+    I_12, I_23, I_13 = mutual_info_full(reshaped_gs, truncation)
+    visualize_mutual_information(I_12, I_23, I_13)
 
-    filter_threshold = sum(I_list)
+    filter_threshold = I_12 + I_23 + I_13
 
     mps1_error, _ = get_mps(reshaped_gs, 1)
 
@@ -103,13 +97,13 @@ if __name__ == '__main__':
     print(f"Almost Exact BD {threshold}: {exact_bd}")
     print(f"Ground state energy: {ed_ground_state_energy}")
 
-    n = 2
+    n = 3
     P, Q = initial_only_PQ(n)
     X = 1e-6 * flatten_matrices_only_PQ(P, Q, n)
-    maxit = 100
+    maxit = 200
     options = {
         'maxiter': maxit,
-        'tol': 1e-100,
+        'tol': 1e-30,
         'disp': False
     }
 
@@ -118,7 +112,7 @@ if __name__ == '__main__':
 
     def cost_fn(X):
         trunc = 10
-        cost1 = mutual_info_cost_func(X, model_H, n, trunc, bd, n_modes)
+        cost1 = shmidt_spectrum_cost(X, model_H, n, trunc, bd)
         return cost1
 
     intermediate_data = []
@@ -127,7 +121,7 @@ if __name__ == '__main__':
         current_value = cost_fn(xk)
         intermediate_data.append(current_value)
         intermediate_values.append(current_value)
-        print("Current total mutual information:", current_value)
+        print("Current Schmidt spectrum sum:", current_value)
 
 
     # Minimize the cost function
@@ -144,11 +138,11 @@ if __name__ == '__main__':
 
     ground_state_energy_optim = eig_value
 
-    reshaped_gs = ground_state_optim.reshape(*(truncation,) * n_modes)
+    reshaped_gs = ground_state_optim.reshape(truncation, truncation, truncation)
 
-    MI_list = mutual_info_full_n_sites(reshaped_gs, truncation, n_modes)
+    I_12, I_23, I_13 = mutual_info_full(reshaped_gs, truncation)
+    visualize_mutual_information(I_12, I_23, I_13)
 
-    visualize_mutual_information(MI_list, n_modes)
 
     error, _ = get_mps(reshaped_gs, bd)
 
@@ -178,7 +172,7 @@ if __name__ == '__main__':
     # Show the plot
     plt.show()
 
-    file_name = f"../../Results/mutual_info_based_3mod.csv"
+    file_name = f"../../Results/Schmidt_spectrum.csv"
 
     file_exists = os.path.isfile(file_name)
 

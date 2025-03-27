@@ -13,23 +13,31 @@ def get_Hamiltonian():
 
 
 
-def visualize_mutual_information(I_12, I_23, I_13):
+def visualize_mutual_information(MI, n):
     """
-    Visualize the mutual information between three modes.
-    :param I_12:
-    :param I_23:
-    :param I_13:
-    :return:
+    Visualize the mutual information between n modes.
+
+    :param MI: List of mutual information values in upper triangular order.
+    :param n: Number of modes.
     """
-    mutual_info_matrix = np.array([[0, I_12, I_13],
-                                   [I_12, 0, I_23],
-                                   [I_13, I_23, 0]])
+    # Initialize an empty mutual information matrix
+    mutual_info_matrix = np.zeros((n, n))
+
+    # Fill the upper triangular part of the matrix
+    index = 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            mutual_info_matrix[i, j] = MI[index]
+            mutual_info_matrix[j, i] = MI[index]  # Symmetric assignment
+            index += 1
 
     # Plot the heatmap
     sns.heatmap(mutual_info_matrix, annot=True, fmt=".5f", cmap="Blues",
-                xticklabels=["1", "2", "3"], yticklabels=["1", "2", "3"])
+                xticklabels=[str(i + 1) for i in range(n)],
+                yticklabels=[str(i + 1) for i in range(n)])
     plt.title("Mutual Information Heatmap")
     plt.show()
+
 
 
 if __name__ == '__main__':

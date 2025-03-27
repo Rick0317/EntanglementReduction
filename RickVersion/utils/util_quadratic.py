@@ -287,11 +287,9 @@ def H_constant_only(H):
 def b_transform(H,n):
 
     H_q = H_quadatic_only(H)
-
     A, B = create_AB(H_q,n)
 
     U, V, L = solve_uv_lambda(A, B, n)
-
     U, V, L = choose_uv(U, V, L, n)
 
     U,V = scale_matrices(U, V,n)

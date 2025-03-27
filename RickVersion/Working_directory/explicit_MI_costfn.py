@@ -1,28 +1,23 @@
-"""
-This is the file for optimizing the Bogolibov unitary based on the
-mutual information of the new basis ground state.
-
-Change the Model Hamiltonian that you use in get_Hamiltonian() function and
-model = , variable definition
-"""
 from RickVersion.utils.util_gfro import *
 from RickVersion.utils.util_tensornetwork import get_approx_bd_mps, get_mps
 from RickVersion.utils.util_hamil import bilinear_three_mode_H, anharmonic_three_mode_H, henon_heiles_two_mode_H
 from RickVersion.utils.util_mutualinfo import mutual_info_full, mutual_info_full_n_sites
-from openfermion import get_quad_operator
+from openfermion import get_boson_operator
 from scipy.optimize import minimize
 from RickVersion.Graph_plots.mutual_information_visualizer import visualize_mutual_information
-import csv
-import os
 import matplotlib.pyplot as plt
+from RickVersion.utils.ham_utils import get_H_op, get_H_ground_state, get_Hmol_params, get_H_ground_state_bosonic, truncate_quad_operator
+from RickVersion.utils.opt_utils import optimize_bog_transfrom, modified_H_params, weighted_sum_MI
 
 
-def get_Hamiltonian():
-    h_variables = [1 / 2, 1 / 2, 0.2, - 0.2 / 3]
-    model_H = henon_heiles_two_mode_H(h_variables)
-    return model_H
+def get_hamiltonian(H_params):
+    # Get H as open fermion quad-operator
+    H = get_H_op(H_params)
 
-def mutual_info_cost_func(X, H, n, trunc, bd, n_modes):
+    return get_boson_operator(H)
+
+
+def mutual_info_cost_func(X, H, n, trunc, bd, n_modes, H_params):
     """
     We find the lowest energy with a given bond dimension
     We need to find the state with bd that lowers the energy.
@@ -42,7 +37,7 @@ def mutual_info_cost_func(X, H, n, trunc, bd, n_modes):
 
     B_b, B_bd = transformed_op_inv_no_translation(U, V)
 
-    model_H = get_Hamiltonian()
+    model_H = get_hamiltonian(H_params)
 
     H1 = substitute_operators(model_H, B_b, B_bd)
 
@@ -53,12 +48,12 @@ def mutual_info_cost_func(X, H, n, trunc, bd, n_modes):
 
     ground_state = eig_vecs
 
-    reshaped_gs = ground_state.reshape(*(truncation,) * n_modes)
+    reshaped_gs = ground_state.reshape(*(trunc,) * n_modes)
 
     MI_list = mutual_info_full_n_sites(reshaped_gs, trunc, n_modes)
     del reshaped_gs
 
-    return sum(MI_list)
+    return weighted_sum_MI(MI_list, n)
 
 
 def hamiltonian_reconstruction(X, H, n):
@@ -76,10 +71,14 @@ def hamiltonian_reconstruction(X, H, n):
 
 
 if __name__ == '__main__':
-    model = "henon_heiles_two_mode_H"
-    truncation = 10
-    n_modes = 2
-    model_H = get_Hamiltonian()
+    au_to_cm = 219474.63068
+    mol = 'H2S'
+    # Read in molecular Hamiltonian
+    n_modes, H_params = get_Hmol_params(mol)
+    truncation = 7
+    error_threshold_frac = 1e-4
+
+    model_H = get_hamiltonian(H_params)
 
     eig_value, eig_vec = boson_eigenspectrum_sparse(model_H, truncation, 1)
 
@@ -101,11 +100,10 @@ if __name__ == '__main__':
     exact_bd = get_approx_bd_mps(reshaped_gs, threshold=threshold)
 
     print(f"Almost Exact BD {threshold}: {exact_bd}")
-    print(f"Ground state energy: {ed_ground_state_energy}")
+    print(f"Ground state energy: {ed_ground_state_energy * au_to_cm}")
 
-    n = 2
-    P, Q = initial_only_PQ(n)
-    X = 1e-6 * flatten_matrices_only_PQ(P, Q, n)
+    P, Q = initial_only_PQ(n_modes)
+    X = 1e-6 * flatten_matrices_only_PQ(P, Q, n_modes)
     maxit = 100
     options = {
         'maxiter': maxit,
@@ -117,8 +115,8 @@ if __name__ == '__main__':
     intermediate_values = []
 
     def cost_fn(X):
-        trunc = 10
-        cost1 = mutual_info_cost_func(X, model_H, n, trunc, bd, n_modes)
+        trunc = 7
+        cost1 = mutual_info_cost_func(X, model_H, n_modes, trunc, bd, n_modes, H_params)
         return cost1
 
     intermediate_data = []
@@ -132,11 +130,11 @@ if __name__ == '__main__':
 
     # Minimize the cost function
     result = minimize(cost_fn, X, method='COBYLA', options=options, callback=printx)
-    # print("Gradient norm:", np.linalg.norm(result.jac))
-    truncation = 10
-    model_H = get_Hamiltonian()
 
-    H_optimized = hamiltonian_reconstruction(result.x, model_H, n)
+    model_H = get_hamiltonian(H_params)
+    truncation = 7
+
+    H_optimized = hamiltonian_reconstruction(result.x, model_H, n_modes)
 
     eig_value, eig_vecs = boson_eigenspectrum_sparse(H_optimized, truncation, 1)
 
@@ -157,8 +155,8 @@ if __name__ == '__main__':
 
     bd_optim = get_approx_bd_mps(reshaped_gs, threshold=threshold)
     print(f"Almost Exact BD {threshold}: {bd_optim}")
-    print(f"Ground state energy: {ground_state_energy_optim}")
-    print(f"Ground state energy change: {energy_change}")
+    print(f"Ground state energy: {ground_state_energy_optim * au_to_cm}")
+    print(f"Ground state energy change: {energy_change * au_to_cm}")
 
     # Create an index list (0, 1, 2, ...)
     filtered_values = [val if val < filter_threshold else np.nan for val in
@@ -177,22 +175,3 @@ if __name__ == '__main__':
 
     # Show the plot
     plt.show()
-
-    file_name = f"../../Results/mutual_info_based_3mod.csv"
-
-    file_exists = os.path.isfile(file_name)
-
-    if energy_change < threshold:
-
-        with open(file_name, mode='a' if file_exists else 'w', newline='',
-                  encoding='utf-8') as csvfile:
-            writer = csv.writer(csvfile)
-
-            # Write the header only if the file doesn't exist
-            if not file_exists:
-                writer.writerow(
-                    ['Model', 'Truncation', 'Threshold', 'Initial BD', 'Final BD', 'Method', 'Intermediate Data'])
-
-            # Write the data
-            writer.writerow(
-                [model, truncation, threshold, exact_bd, bd_optim, 'Mutual Info', intermediate_data])

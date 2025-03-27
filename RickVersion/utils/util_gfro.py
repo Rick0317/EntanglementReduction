@@ -64,6 +64,7 @@ def vector_to_triu(vector, n):
 
     return matrix
 
+
 # extract n(n-1)/2 off diagonal upper terms from P
 def skew_sym_to_vec(P, n):
 
@@ -314,3 +315,32 @@ def quad_diagonalization(H,n):
     Hr1 = Hqr + Hcr + H4r
 
     return H_real(Hr1)
+
+
+def mode_swap(H, a, b):
+    """
+    Swap the mode a and b in H
+    :param H: Bosonic Hamiltonian
+    :param a: First mode
+    :param b: Second mode
+    :return:
+    """
+    result = BosonOperator()
+
+    for term, coeff in H.terms.items():
+        new_term = BosonOperator('', 1.0)
+        for op in term:
+            index, action = op
+            if index == a:
+                new_term *= BosonOperator(((b, action),), 1.0)
+            elif index == b:
+                new_term *= BosonOperator(((a, action),), 1.0)
+            else:
+                new_term *= BosonOperator(((index, action),), 1.0)
+
+        result += coeff * new_term
+
+        result = normal_ordered(result)
+
+    return result
+

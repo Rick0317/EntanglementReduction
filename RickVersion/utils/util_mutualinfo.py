@@ -105,3 +105,79 @@ def single_entropy_full(f1, n):
     s3 = von_neumann_entropy(rho_3)
 
     return s1, s2, s3
+
+
+def one_mode_rdm_n_sites(density_matrix, trunc, n):
+    """
+    Find the 1 mode reduced density matrix of a given density matrix.
+    :param density_matrix: The density matrix
+    :param trunc:
+    :param n: Number of modes
+    :return:
+    """
+
+    rho_list = [np.zeros((trunc, trunc), dtype=complex) for _ in range(n)]
+    for site in range(n):
+        for i in range(trunc):
+            for j in range(trunc):
+                idx = tuple(
+                    i if ax == site else slice(None) for ax in range(n))
+                idx_conj = tuple(
+                    j if ax == site else slice(None) for ax in range(n))
+
+                rho_list[site][i, j] = np.sum(density_matrix[idx] * np.conj(density_matrix[idx_conj]))
+
+    return rho_list
+
+
+def two_mode_rdm_n_sites(density_matrix, i, j, trunc, n):
+    """
+    Find the 2 modes reduced density matrix of a given density matrix.
+    :param density_matrix: Density matrix
+    :param i: The first mode
+    :param j: The second mode
+    :param trunc: The truncation
+    :param n: Number of modes
+    :return:
+    """
+
+    rho_ij = np.zeros((trunc ** 2, trunc ** 2), dtype=complex)
+
+    for a in range(trunc):
+        for b in range(trunc):
+            for c in range(trunc):
+                for d in range(trunc):
+                    idx = tuple(
+                        a if ax == i else b if ax == j else slice(None) for ax
+                        in range(n)
+                    )
+                    idx_conj = tuple(
+                        c if ax == i else d if ax == j else slice(None) for ax
+                        in range(n)
+                    )
+
+                    rho_ij[a * trunc + b, c * trunc + d] = np.sum(
+                        density_matrix[idx] * np.conj(density_matrix[idx_conj]))
+
+    return rho_ij
+
+
+def mutual_info_full_n_sites(density_matrix, trunc, n):
+    """
+    Calculates the mutual information of a given density matrix for 3 modes
+    :param density_matrix:
+    :param trunc:
+    :param n: Number of modes
+    :return:
+    """
+
+    rho_list = one_mode_rdm_n_sites(density_matrix, trunc, n)
+    mi_list = []
+    for i in range(n):
+        for j in range(i+1, n):
+            rho_i = rho_list[i]
+            rho_j = rho_list[j]
+            rho_ij = two_mode_rdm_n_sites(density_matrix, i, j, trunc, n)
+            mi_list.append(mutual_information(rho_i, rho_j, rho_ij))
+
+    return mi_list

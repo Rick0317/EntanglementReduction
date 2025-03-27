@@ -46,17 +46,20 @@ def get_approx_bd_mps(tensor: np.ndarray, threshold):
     :param threshold:
     :return:
     """
+    data = []
     bd = 1
     print(f"Bond dimension: {bd}")
     error, tt_cores = get_mps(tensor.copy(), rank=bd)
     print(f"Error: {error}")
+    data.append({"bd": bd, "error": error})
     while error > threshold:
         bd += 1
         print(f"Bond dimension: {bd}")
         error, tt_cores = get_mps(tensor.copy(), rank=bd)
         print(f"Error: {error}")
+        data.append({"bd": bd, "error": error})
 
-    return bd
+    return bd, data
 
 
 def get_approx_bd_mps_energy(tensor: np.ndarray, threshold):
